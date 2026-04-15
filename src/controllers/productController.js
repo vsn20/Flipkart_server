@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Product, Category } = require('../models');
+const { Product, Category, Subcategory, SubSubcategory, Brand } = require('../models');
 
 // Get all products with search, filter, sort, pagination
 exports.getAllProducts = async (req, res, next) => {
@@ -10,10 +10,16 @@ exports.getAllProducts = async (req, res, next) => {
       search,
       category,
       category_id,
+      subcategory,
+      subcategory_id,
+      sub_subcategory,
+      sub_subcategory_id,
       min_price,
       max_price,
       min_rating,
       brand,
+      brand_id,
+      color,
       sort = 'relevance',
       featured,
     } = req.query;
@@ -22,12 +28,16 @@ exports.getAllProducts = async (req, res, next) => {
 
     // Search by name, brand, description, or category name
     if (search) {
-      // Also find matching category IDs
       const matchingCategories = await Category.findAll({
         where: { name: { [Op.like]: `%${search}%` } },
         attributes: ['id'],
       });
+      const matchingSubcategories = await Subcategory.findAll({
+        where: { name: { [Op.like]: `%${search}%` } },
+        attributes: ['id'],
+      });
       const matchingCatIds = matchingCategories.map((c) => c.id);
+      const matchingSubCatIds = matchingSubcategories.map((s) => s.id);
 
       const searchConditions = [
         { name: { [Op.like]: `%${search}%` } },
@@ -38,21 +48,47 @@ exports.getAllProducts = async (req, res, next) => {
       if (matchingCatIds.length > 0) {
         searchConditions.push({ category_id: { [Op.in]: matchingCatIds } });
       }
+      if (matchingSubCatIds.length > 0) {
+        searchConditions.push({ subcategory_id: { [Op.in]: matchingSubCatIds } });
+      }
 
       where[Op.or] = searchConditions;
     }
 
-    // Filter by category ID
+    // Filter by category (ID or slug)
     if (category_id) {
       where.category_id = category_id;
+    } else if (category) {
+      const cat = await Category.findOne({ where: { slug: category } });
+      if (cat) where.category_id = cat.id;
     }
 
-    // Filter by category slug
-    if (category) {
-      const cat = await Category.findOne({ where: { slug: category } });
-      if (cat) {
-        where.category_id = cat.id;
-      }
+    // Filter by subcategory (ID or slug)
+    if (subcategory_id) {
+      where.subcategory_id = subcategory_id;
+    } else if (subcategory) {
+      const sub = await Subcategory.findOne({ where: { slug: subcategory } });
+      if (sub) where.subcategory_id = sub.id;
+    }
+
+    // Filter by sub_subcategory (ID or slug)
+    if (sub_subcategory_id) {
+      where.sub_subcategory_id = sub_subcategory_id;
+    } else if (sub_subcategory) {
+      const subsub = await SubSubcategory.findOne({ where: { slug: sub_subcategory } });
+      if (subsub) where.sub_subcategory_id = subsub.id;
+    }
+
+    // Filter by brand (ID or name list)
+    if (brand_id) {
+      where.brand_id = brand_id;
+    } else if (brand) {
+      where.brand = { [Op.in]: brand.split(',') };
+    }
+
+    // Filter by color
+    if (color) {
+      where.color = { [Op.in]: color.split(',') };
     }
 
     // Price range
@@ -67,11 +103,6 @@ exports.getAllProducts = async (req, res, next) => {
       where.rating = { [Op.gte]: parseFloat(min_rating) };
     }
 
-    // Brand filter
-    if (brand) {
-      where.brand = { [Op.in]: brand.split(',') };
-    }
-
     // Featured filter
     if (featured === 'true') {
       where.is_featured = true;
@@ -83,23 +114,12 @@ exports.getAllProducts = async (req, res, next) => {
     // Sort options
     let order;
     switch (sort) {
-      case 'price_low':
-        order = [['price', 'ASC']];
-        break;
-      case 'price_high':
-        order = [['price', 'DESC']];
-        break;
-      case 'rating':
-        order = [['rating', 'DESC']];
-        break;
-      case 'newest':
-        order = [['created_at', 'DESC']];
-        break;
-      case 'discount':
-        order = [['discount_percent', 'DESC']];
-        break;
-      default:
-        order = [['is_featured', 'DESC'], ['rating', 'DESC']];
+      case 'price_low': order = [['price', 'ASC']]; break;
+      case 'price_high': order = [['price', 'DESC']]; break;
+      case 'rating': order = [['rating', 'DESC']]; break;
+      case 'newest': order = [['created_at', 'DESC']]; break;
+      case 'discount': order = [['discount_percent', 'DESC']]; break;
+      default: order = [['is_featured', 'DESC'], ['rating', 'DESC']];
     }
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -107,11 +127,10 @@ exports.getAllProducts = async (req, res, next) => {
     const { count, rows: products } = await Product.findAndCountAll({
       where,
       include: [
-        {
-          model: Category,
-          as: 'category',
-          attributes: ['id', 'name', 'slug'],
-        },
+        { model: Category, as: 'category', attributes: ['id', 'name', 'slug'] },
+        { model: Subcategory, as: 'subcategory', attributes: ['id', 'name', 'slug'] },
+        { model: SubSubcategory, as: 'subSubcategory', attributes: ['id', 'name', 'slug'] },
+        { model: Brand, as: 'brandInfo', attributes: ['id', 'name', 'slug', 'logo_url'] },
       ],
       order,
       limit: parseInt(limit),
@@ -139,11 +158,10 @@ exports.getProductById = async (req, res, next) => {
 
     const product = await Product.findByPk(id, {
       include: [
-        {
-          model: Category,
-          as: 'category',
-          attributes: ['id', 'name', 'slug'],
-        },
+        { model: Category, as: 'category', attributes: ['id', 'name', 'slug'] },
+        { model: Subcategory, as: 'subcategory', attributes: ['id', 'name', 'slug'] },
+        { model: SubSubcategory, as: 'subSubcategory', attributes: ['id', 'name', 'slug'] },
+        { model: Brand, as: 'brandInfo', attributes: ['id', 'name', 'slug', 'logo_url'] },
       ],
     });
 
@@ -151,13 +169,19 @@ exports.getProductById = async (req, res, next) => {
       return res.status(404).json({ message: 'Product not found.' });
     }
 
-    // Get similar products from same category
+    // Get similar products from same subcategory (or category if no subcategory)
+    const similarWhere = {
+      id: { [Op.ne]: product.id },
+      stock: { [Op.gt]: 0 },
+    };
+    if (product.subcategory_id) {
+      similarWhere.subcategory_id = product.subcategory_id;
+    } else {
+      similarWhere.category_id = product.category_id;
+    }
+
     const similarProducts = await Product.findAll({
-      where: {
-        category_id: product.category_id,
-        id: { [Op.ne]: product.id },
-        stock: { [Op.gt]: 0 },
-      },
+      where: similarWhere,
       limit: 8,
       order: [['rating', 'DESC']],
     });
@@ -173,21 +197,30 @@ exports.getFeaturedProducts = async (req, res, next) => {
   try {
     const featuredProducts = await Product.findAll({
       where: { is_featured: true, stock: { [Op.gt]: 0 } },
-      include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'slug'] }],
+      include: [
+        { model: Category, as: 'category', attributes: ['id', 'name', 'slug'] },
+        { model: Subcategory, as: 'subcategory', attributes: ['id', 'name', 'slug'] },
+      ],
       limit: 12,
       order: [['rating', 'DESC']],
     });
 
     const topDeals = await Product.findAll({
       where: { discount_percent: { [Op.gte]: 20 }, stock: { [Op.gt]: 0 } },
-      include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'slug'] }],
+      include: [
+        { model: Category, as: 'category', attributes: ['id', 'name', 'slug'] },
+        { model: Subcategory, as: 'subcategory', attributes: ['id', 'name', 'slug'] },
+      ],
       limit: 12,
       order: [['discount_percent', 'DESC']],
     });
 
     const bestSellers = await Product.findAll({
       where: { rating: { [Op.gte]: 4.0 }, stock: { [Op.gt]: 0 } },
-      include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'slug'] }],
+      include: [
+        { model: Category, as: 'category', attributes: ['id', 'name', 'slug'] },
+        { model: Subcategory, as: 'subcategory', attributes: ['id', 'name', 'slug'] },
+      ],
       limit: 12,
       order: [['review_count', 'DESC']],
     });
@@ -229,12 +262,13 @@ exports.searchSuggestions = async (req, res, next) => {
   }
 };
 
-// Get all unique brands
+// Get brands – supports filtering by category/subcategory context
 exports.getBrands = async (req, res, next) => {
   try {
-    const { category_id } = req.query;
+    const { category_id, subcategory_id } = req.query;
     const where = {};
     if (category_id) where.category_id = category_id;
+    if (subcategory_id) where.subcategory_id = subcategory_id;
 
     const products = await Product.findAll({
       where,
@@ -245,6 +279,28 @@ exports.getBrands = async (req, res, next) => {
 
     const brands = products.map((p) => p.brand).filter(Boolean);
     res.json({ brands });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get available colors for a given filter context
+exports.getColors = async (req, res, next) => {
+  try {
+    const { category_id, subcategory_id } = req.query;
+    const where = { color: { [Op.ne]: null } };
+    if (category_id) where.category_id = category_id;
+    if (subcategory_id) where.subcategory_id = subcategory_id;
+
+    const products = await Product.findAll({
+      where,
+      attributes: ['color'],
+      group: ['color'],
+      order: [['color', 'ASC']],
+    });
+
+    const colors = products.map((p) => p.color).filter(Boolean);
+    res.json({ colors });
   } catch (error) {
     next(error);
   }

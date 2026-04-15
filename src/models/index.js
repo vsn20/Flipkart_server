@@ -1,6 +1,10 @@
 const sequelize = require('../config/database');
 const User = require('./User');
 const Category = require('./Category');
+const Subcategory = require('./Subcategory');
+const SubSubcategory = require('./SubSubcategory');
+const Brand = require('./Brand');
+const Color = require('./Color');
 const Product = require('./Product');
 const Cart = require('./Cart');
 const CartItem = require('./CartItem');
@@ -10,13 +14,32 @@ const Wishlist = require('./Wishlist');
 const WishlistItem = require('./WishlistItem');
 const Address = require('./Address');
 
-// ─── Associations ──────────────────────────────────────
+// ─── Category Hierarchy ────────────────────────────────
+// Category → Subcategory → SubSubcategory
+Category.hasMany(Subcategory, { foreignKey: 'category_id', as: 'subcategories' });
+Subcategory.belongsTo(Category, { foreignKey: 'category_id', as: 'category' });
 
+Subcategory.hasMany(SubSubcategory, { foreignKey: 'subcategory_id', as: 'subSubcategories' });
+SubSubcategory.belongsTo(Subcategory, { foreignKey: 'subcategory_id', as: 'subcategory' });
+
+// ─── Product Associations ──────────────────────────────
 // Category <-> Product
 Category.hasMany(Product, { foreignKey: 'category_id', as: 'products' });
 Product.belongsTo(Category, { foreignKey: 'category_id', as: 'category' });
 
-// User <-> Cart (one-to-one)
+// Subcategory <-> Product
+Subcategory.hasMany(Product, { foreignKey: 'subcategory_id', as: 'products' });
+Product.belongsTo(Subcategory, { foreignKey: 'subcategory_id', as: 'subcategory' });
+
+// SubSubcategory <-> Product
+SubSubcategory.hasMany(Product, { foreignKey: 'sub_subcategory_id', as: 'products' });
+Product.belongsTo(SubSubcategory, { foreignKey: 'sub_subcategory_id', as: 'subSubcategory' });
+
+// Brand <-> Product
+Brand.hasMany(Product, { foreignKey: 'brand_id', as: 'products' });
+Product.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brandInfo' });
+
+// ─── User <-> Cart (one-to-one) ────────────────────────
 User.hasOne(Cart, { foreignKey: 'user_id', as: 'cart' });
 Cart.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
@@ -60,6 +83,10 @@ module.exports = {
   sequelize,
   User,
   Category,
+  Subcategory,
+  SubSubcategory,
+  Brand,
+  Color,
   Product,
   Cart,
   CartItem,

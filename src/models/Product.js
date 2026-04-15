@@ -36,6 +36,34 @@ const Product = sequelize.define('Product', {
       key: 'id',
     },
   },
+  subcategory_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'subcategories',
+      key: 'id',
+    },
+  },
+  sub_subcategory_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'sub_subcategories',
+      key: 'id',
+    },
+  },
+  brand_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'brands',
+      key: 'id',
+    },
+  },
+  color: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
   images: {
     type: DataTypes.JSON,
     allowNull: true,
