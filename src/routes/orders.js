@@ -7,6 +7,7 @@ const authMiddleware = require('../middleware/auth');
 router.use(authMiddleware);
 
 router.post('/', orderController.placeOrder);
+router.post('/direct', orderController.placeDirectOrder);
 router.get('/', orderController.getOrders);
 router.get('/:id', orderController.getOrderById);
 
