@@ -1,6 +1,7 @@
 const { Order, OrderItem, Cart, CartItem, Product, User } = require('../models');
 const { Op } = require('sequelize');
 const sequelize = require('../config/database');
+const { sendOrderConfirmationEmail } = require('../services/emailService');
 
 // Place a new order
 exports.placeOrder = async (req, res, next) => {
@@ -137,6 +138,25 @@ exports.placeOrder = async (req, res, next) => {
       include: [{ model: OrderItem, as: 'items' }],
     });
 
+    // Send order confirmation email (fire-and-forget)
+    if (user.email && !user.is_guest) {
+      sendOrderConfirmationEmail(user.email, {
+        order_number: orderNumber,
+        items: cart.items.map(i => ({
+          product_name: i.product.name,
+          quantity: i.quantity,
+          price: i.product.price,
+          product_image: i.product.images && i.product.images.length > 0 ? i.product.images[0] : null,
+        })),
+        total_amount: totalAmount,
+        discount_amount: totalDiscount,
+        delivery_charges: deliveryCharges,
+        shipping_name, shipping_phone, shipping_address,
+        shipping_city, shipping_state, shipping_pincode,
+        payment_method,
+      }).catch(err => console.error('Email send error:', err));
+    }
+
     res.status(201).json({
       message: 'Order placed successfully!',
       order: completeOrder,
@@ -209,6 +229,26 @@ exports.placeDirectOrder = async (req, res, next) => {
     await t.commit();
 
     const completeOrder = await Order.findByPk(order.id, { include: [{ model: OrderItem, as: 'items' }] });
+
+    // Send order confirmation email (fire-and-forget)
+    if (user.email && !user.is_guest) {
+      sendOrderConfirmationEmail(user.email, {
+        order_number: orderNumber,
+        items: [{
+          product_name: product.name,
+          quantity,
+          price: product.price,
+          product_image: product.images?.[0] || null,
+        }],
+        total_amount: totalAmount,
+        discount_amount: totalDiscount,
+        delivery_charges: deliveryCharges,
+        shipping_name, shipping_phone, shipping_address,
+        shipping_city, shipping_state, shipping_pincode,
+        payment_method,
+      }).catch(err => console.error('Email send error:', err));
+    }
+
     res.status(201).json({ message: 'Order placed successfully!', order: completeOrder, superCoinsEarned });
   } catch (error) {
     await t.rollback();
